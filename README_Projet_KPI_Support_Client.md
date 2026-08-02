@@ -36,3 +36,35 @@ CSAT : restreint à l'échelle 1–5, hors échelle ou texte mis à vide.
 NPS : restreint à l'échelle 0–10, hors échelle mis à vide.
 ID_Ticket (table Enquêtes) : harmonisation de casse pour permettre le rapprochement avec la table Tickets.
 Doublons : suppression des doublons stricts sur les 3 tables de faits (tickets, productivité, enquêtes).
+
+## Modèle en étoile
+
+Le modèle repose sur 5 tables reliées par des clés `ID_Agent` et `ID_Mois`, avec une relation faits-à-faits directe entre Tickets et Enquêtes (grain compatible : 1 enquête = 1 ticket).
+
+Agents (40 lignes)
+           /        |
+          /         |
+  Tickets      Productivite
+    |  \            
+    |   \           
+    |  Dim_Calendrier
+    |
+
+- `Tickets[ID_Agent]` → `Agents[ID_Agent]`
+- `Tickets[ID_Mois]` → `Dim_Calendrier[Id_Mois]`
+- `Productivite[ID_Agent]` → `Agents[ID_Agent]`
+- `Productivite[ID_Mois]` → `Dim_Calendrier[Id_Mois]`
+- `Enquetes_Satisfaction[ID_Ticket]` → `Tickets[ID_Ticket]`
+
+**Point de modélisation notable** : `Enquetes_Satisfaction` n'a volontairement pas de clé `ID_Agent` directe — l'information est récupérée par propagation de filtre à travers `Tickets` (chaîne `Agents → Tickets → Enquetes`). Ajouter ce lien en direct créerait un second chemin de relation entre les deux tables, ce qui obligerait à arbitrer explicitement quel chemin utiliser à chaque mesure (`USERELATIONSHIP` en DAX) — complexité évitée ici par un choix de modélisation.
+
+## Familles de KPI suivies
+
+| Famille | KPI |
+|---|---|
+| **Qualité** | Taux de résolution, taux de réouverture, taux de résolution au premier contact |
+| **Productivité** | Tickets traités, tickets par heure, taux de présence, backlog (écart traité vs reçu) |
+| **SLA** | Taux de respect des délais, retard moyen |
+| **Satisfaction** | CSAT moyen, NPS (calculé sur promoteurs/détracteurs), taux de réclamation |
+
+Chaque famille est calculée à deux niveaux : par agent (feuille `suivi_KPI`) et de façon agrégée pour la vue d'ensemble — avec attention portée aux pièges classiques d'agrégation (ex : ne pas moyenner des taux déjà calculés par agent sans pondération par leur volume).
